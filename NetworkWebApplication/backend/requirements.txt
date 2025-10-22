@@ -1,0 +1,10 @@
+flask
+flask-restful
+pymongo
+pythonping
+apscheduler
+python-dotenv
+flask-cors
+pytest
+mongomock
+requests
