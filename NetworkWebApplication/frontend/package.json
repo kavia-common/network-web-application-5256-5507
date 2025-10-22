@@ -14,8 +14,10 @@
     "build": "react-scripts build",
     "test": "react-scripts test --watchAll=false",
     "eject": "react-scripts eject",
-    "cypress:open": "echo \"Cypress not configured yet\" && exit 0",
-    "cypress:run": "echo \"Cypress not configured yet\" && exit 0"
+    "cypress:open": "cross-env CYPRESS_BASE_URL=${CYPRESS_BASE_URL:-http://localhost:3000} cypress open",
+    "cypress:run": "cross-env CYPRESS_BASE_URL=${CYPRESS_BASE_URL:-http://localhost:5000} cypress run",
+    "e2e:open": "npm run cypress:open",
+    "e2e:run": "npm run cypress:run"
   },
   "eslintConfig": {
     "extends": "react-app"
@@ -33,6 +35,8 @@
     ]
   },
   "devDependencies": {
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "cypress": "^13.13.1",
+    "@testing-library/cypress": "^10.0.1"
   }
 }
