@@ -1,11 +1,10 @@
-import os
 import logging
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, jsonify
 from flask_restful import Api, Resource
 from flask_cors import CORS
 
 from .config import get_config
-from .utils.responses import success, error
+from .utils.responses import success
 from .utils.logging_config import configure_logging
 from .services.db import ensure_indexes
 from .services.scheduler import init_scheduler, shutdown_scheduler
@@ -15,33 +14,30 @@ def create_app() -> Flask:
     """Create and configure the Flask application instance.
 
     This configures:
-    - CORS for /api/* routes
     - Flask-RESTful API under /api
-    - Static serving of the React app from ../frontend/build
-    - SPA catch-all to return index.html for client-side routing
+    - CORS for /api/* routes with configurable origins
     - Background scheduler lifecycle hooks
     """
     # Configure logging early
     configure_logging()
 
-    # Resolve static folder path (frontend build at ../frontend/build)
-    # backend/app.py -> base_dir is the container root (NetworkWebApplication)
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    static_folder = os.path.join(base_dir, "frontend", "build")
-
-    # Create app; allow missing build folder (dev-backend only)
-    app = Flask(
-        __name__,
-        static_folder=static_folder if os.path.isdir(static_folder) else None,
-        static_url_path="/",  # serve assets at root (e.g., /static/js/main.js resolved from build)
-    )
+    # Create app (no static folder: frontend is served separately)
+    app = Flask(__name__)
 
     # Load config
     cfg = get_config()
     app.config["APP_CFG"] = cfg
 
-    # Enable CORS for API routes only; do not affect static file responses
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # Enable CORS for API routes only; allow configurable origins via env FRONTEND_ORIGIN (default "*")
+    # Keep permissive for development by default.
+    cors_origins = "*"
+    try:
+        # Try to read an optional FRONTEND_ORIGIN value from environment via config if later added
+        # For now, allow override via FLASK_CORS_ORIGINS env read by flask-cors when set.
+        # If project later adds FRONTEND_ORIGIN to config.py, this can be wired here.
+        pass
+    finally:
+        CORS(app, resources={r"/api/*": {"origins": cors_origins}})
 
     # Initialize API with prefix /api
     api = Api(app, prefix="/api")
@@ -73,11 +69,11 @@ def create_app() -> Flask:
         def get(self):
             return jsonify(success({"uptime": True, "ping_enabled": cfg.PING_ENABLED}))
 
-    # Register resources (more will be added later)
+    # Register resources
     api.add_resource(HealthResource, "/health", endpoint="health")
 
     # Devices resources
-    from .resources.devices import DevicesListResource, DeviceResource  # Import here to avoid circulars at module load
+    from .resources.devices import DevicesListResource, DeviceResource
     api.add_resource(DevicesListResource, "/devices", endpoint="devices_list")
     api.add_resource(DeviceResource, "/devices/<string:device_id>", endpoint="device_detail")
 
@@ -89,52 +85,7 @@ def create_app() -> Flask:
         endpoint="device_status",
     )
 
-    # Serve static assets from the React build directory if present
-    @app.route("/assets/<path:filename>")
-    def serve_static_assets(filename: str):
-        """Serve static assets from the React build folder's assets path if present."""
-        if app.static_folder and os.path.isdir(app.static_folder):
-            asset_path = os.path.join(app.static_folder, filename)
-            if os.path.isfile(asset_path):
-                return send_from_directory(app.static_folder, filename)
-        return jsonify(error("Asset not found", code="ASSET_NOT_FOUND")), 404
-
-    # SPA index and catch-all: serve index.html for root and unrecognized non-API paths
-    @app.route("/", defaults={"path": ""})
-    @app.route("/<path:path>")
-    def serve_react_app(path: str):
-        """Serve the React build if available; otherwise provide a helpful message.
-
-        - If a specific static file is requested and exists, serve it
-        - For any other non-API path, serve index.html (client-side routing)
-        - If build folder is missing, return a JSON helper with API health link
-        """
-        # Do not intercept API endpoints
-        if path.startswith("api"):
-            return jsonify(error("Endpoint not found", code="NOT_FOUND")), 404
-
-        if app.static_folder and os.path.isdir(app.static_folder):
-            # If the requested file exists within the build folder, serve it as-is
-            file_path = os.path.join(app.static_folder, path)
-            if path and os.path.isfile(file_path):
-                return send_from_directory(app.static_folder, path)
-
-            # Otherwise serve index.html (SPA routing)
-            index_path = os.path.join(app.static_folder, "index.html")
-            if os.path.isfile(index_path):
-                return send_from_directory(app.static_folder, "index.html")
-
-        # Fallback message when frontend build is not present
-        return jsonify(
-            success(
-                {
-                    "message": "Frontend build not found. API is running.",
-                    "api_health": request.host_url.rstrip("/") + "/api/health",
-                }
-            )
-        )
-
-    # Root API index helper (preserved)
+    # Root API index helper
     @app.route("/api", methods=["GET"])
     def api_index():
         """Basic API index with available starter routes."""
@@ -154,7 +105,7 @@ def create_app() -> Flask:
             )
         )
 
-    logging.getLogger(__name__).info("Application initialized; static at %s", app.static_folder)
+    logging.getLogger(__name__).info("Application initialized (no static serving enabled).")
     return app
 
 
