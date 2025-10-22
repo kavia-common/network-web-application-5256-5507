@@ -7,6 +7,7 @@ from flask_cors import CORS
 from .config import get_config
 from .utils.responses import success, error
 from .utils.logging_config import configure_logging
+from .services.db import ensure_indexes
 
 
 def create_app() -> Flask:
@@ -35,6 +36,13 @@ def create_app() -> Flask:
 
     # Initialize API with prefix /api
     api = Api(app, prefix="/api")
+
+    # Initialize database indexes at startup
+    try:
+        ensure_indexes()
+    except Exception as db_exc:
+        # Log the exception; app can still run, but DB operations may fail without proper config.
+        logging.getLogger(__name__).error("Failed to ensure DB indexes: %s", db_exc)
 
     # Health resource (minimal placeholder)
     class HealthResource(Resource):
