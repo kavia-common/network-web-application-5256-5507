@@ -8,6 +8,7 @@ from .config import get_config
 from .utils.responses import success, error
 from .utils.logging_config import configure_logging
 from .services.db import ensure_indexes
+from .services.scheduler import init_scheduler, shutdown_scheduler
 
 
 def create_app() -> Flask:
@@ -43,6 +44,20 @@ def create_app() -> Flask:
     except Exception as db_exc:
         # Log the exception; app can still run, but DB operations may fail without proper config.
         logging.getLogger(__name__).error("Failed to ensure DB indexes: %s", db_exc)
+
+    # Start background scheduler if enabled
+    try:
+        init_scheduler()
+    except Exception as sched_exc:
+        logging.getLogger(__name__).error("Failed to initialize scheduler: %s", sched_exc)
+
+    # Ensure graceful shutdown of scheduler on app teardown
+    @app.teardown_appcontext
+    def _teardown_scheduler(exception):  # noqa: ARG001
+        try:
+            shutdown_scheduler()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Error during scheduler teardown: %s", exc)
 
     # Health resource (minimal placeholder)
     class HealthResource(Resource):
