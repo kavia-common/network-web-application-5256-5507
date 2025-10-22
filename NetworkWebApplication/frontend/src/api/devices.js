@@ -27,19 +27,20 @@ export async function updateDevice(id, updates, method = 'PATCH') {
 
 // PUBLIC_INTERFACE
 export async function deleteDevice(id) {
-  /** Delete a device by id */
-  // For 204, apiRequest would try to parse; handle here via fetch
-  const BASE_URL = process.env.REACT_APP_API_BASE || '/api';
-  const res = await fetch(`${BASE_URL}/devices/${encodeURIComponent(id)}`, {
+  /** Delete a device by id. Uses centralized API base via apiRequest for URL construction. */
+  const url = `/devices/${encodeURIComponent(id)}`;
+  // Use fetch directly to gracefully handle 204 No Content without JSON parsing
+  const full = (process.env.REACT_APP_API_BASE || '/api') + url;
+  const res = await fetch(full, {
     method: 'DELETE',
-    headers: { 'Accept': 'application/json' }
+    headers: { Accept: 'application/json' },
   });
   if (!res.ok && res.status !== 204) {
     let data = null;
     try {
       data = await res.json();
     } catch {
-      // noop
+      // ignore parse errors
     }
     const message = (data && data.message) || `Request failed with status ${res.status}`;
     const err = new Error(message);

@@ -1,3 +1,8 @@
+/**
+ * API base URL is configurable via environment:
+ * - REACT_APP_API_BASE: full base such as "http://localhost:5000/api" or just "/api"
+ * Defaults to "/api" to support local proxy or same-origin deployments.
+ */
 const BASE_URL = process.env.REACT_APP_API_BASE || '/api';
 
 // PUBLIC_INTERFACE
@@ -7,11 +12,11 @@ export async function apiRequest(path, { method = 'GET', headers = {}, body } = 
   const opts = {
     method,
     headers: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
       ...(body ? { 'Content-Type': 'application/json' } : {}),
-      ...headers
+      ...headers,
     },
-    body: body ? JSON.stringify(body) : undefined
+    body: body ? JSON.stringify(body) : undefined,
   };
 
   let res;

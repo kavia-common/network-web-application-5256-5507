@@ -10,12 +10,11 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "start:prod-note": "echo \"Production build is served by Flask from frontend/build\"",
     "build": "react-scripts build",
     "test": "react-scripts test --watchAll=false",
     "eject": "react-scripts eject",
     "cypress:open": "cross-env CYPRESS_BASE_URL=${CYPRESS_BASE_URL:-http://localhost:3000} cypress open",
-    "cypress:run": "cross-env CYPRESS_BASE_URL=${CYPRESS_BASE_URL:-http://localhost:5000} cypress run",
+    "cypress:run": "cross-env CYPRESS_BASE_URL=${CYPRESS_BASE_URL:-http://localhost:3000} cypress run",
     "e2e:open": "npm run cypress:open",
     "e2e:run": "npm run cypress:run"
   },

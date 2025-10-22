@@ -1,6 +1,6 @@
 # Network Web Application
 
-A monolithic React + Flask application for managing network devices. Users can add, view, edit, delete, and ping devices. The backend exposes RESTful APIs backed by MongoDB, and in production the Flask app serves the built React frontend.
+A React + Flask application for managing network devices. Users can add, view, edit, delete, and ping devices. The backend exposes RESTful APIs backed by MongoDB. The frontend is now a standalone React app; the backend serves only API endpoints.
 
 ## Overview
 
