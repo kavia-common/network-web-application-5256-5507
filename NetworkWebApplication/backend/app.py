@@ -59,6 +59,14 @@ def create_app() -> Flask:
     api.add_resource(DevicesListResource, "/devices", endpoint="devices_list")
     api.add_resource(DeviceResource, "/devices/<string:device_id>", endpoint="device_detail")
 
+    # Status resource (manual device status check)
+    from .resources.status import DeviceStatusResource
+    api.add_resource(
+        DeviceStatusResource,
+        "/devices/<string:device_id>/status",
+        endpoint="device_status",
+    )
+
     # Static file serving
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
