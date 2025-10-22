@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  backend:
+    name: Backend - PyTest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: network-web-application-5256-5507/NetworkWebApplication
+    env:
+      # Disable background scheduler during CI to avoid threads and flakiness
+      PING_ENABLED: "false"
+      # Provide dummy Mongo vars so code paths expecting presence don't fail; tests use mongomock
+      MONGODB_URI: "mongodb://localhost:27017"
+      MONGODB_DB: "network_devices_ci"
+      MONGODB_COLLECTION: "devices_ci"
+      # General test settings
+      FLASK_ENV: "production"
+      FLASK_DEBUG: "false"
+      APP_PORT: "5000"
+      PING_INTERVAL_SECONDS: "300"
+      PING_TIMEOUT_MS: "1000"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            network-web-application-5256-5507/NetworkWebApplication/backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run backend tests (pytest)
+        run: |
+          pytest -q
+        working-directory: network-web-application-5256-5507/NetworkWebApplication/backend
+
+  frontend:
+    name: Frontend - Jest and Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: network-web-application-5256-5507/NetworkWebApplication/frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: |
+            network-web-application-5256-5507/NetworkWebApplication/frontend/package.json
+            network-web-application-5256-5507/NetworkWebApplication/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend unit tests (jest)
+        env:
+          CI: "true"
+          PING_ENABLED: "false"
+        run: npm test -- --watchAll=false
+
+      - name: Build frontend
+        env:
+          CI: "true"
+          PING_ENABLED: "false"
+        run: npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: network-web-application-5256-5507/NetworkWebApplication/frontend/build
+
+  e2e:
+    name: E2E - Cypress against Flask serving build
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    defaults:
+      run:
+        working-directory: network-web-application-5256-5507/NetworkWebApplication
+    env:
+      # Ensure scheduler is disabled and CI-safe config
+      PING_ENABLED: "false"
+      FLASK_ENV: "production"
+      FLASK_DEBUG: "false"
+      APP_PORT: "5000"
+      PING_INTERVAL_SECONDS: "300"
+      PING_TIMEOUT_MS: "1000"
+      # Use in-memory mongomock by patching in tests; for runtime E2E we keep URI dummy.
+      MONGODB_URI: "mongodb://localhost:27017"
+      MONGODB_DB: "network_devices_ci"
+      MONGODB_COLLECTION: "devices_ci"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: network-web-application-5256-5507/NetworkWebApplication/frontend/build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            network-web-application-5256-5507/NetworkWebApplication/backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Verify frontend build presence
+        run: |
+          ls -la frontend/build || (echo "Frontend build missing" && exit 1)
+
+      - name: Start Flask backend (serve built frontend)
+        run: |
+          echo "Starting Flask app on port ${APP_PORT}..."
+          nohup python -m backend.app > flask.log 2>&1 &
+          echo $! > flask.pid
+          sleep 3
+          echo "Flask started. Checking health..."
+          curl -sSf http://localhost:${APP_PORT}/api/health || (echo "Health check failed"; tail -n 200 flask.log; exit 1)
+
+      - name: Set up Node.js for Cypress
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: |
+            network-web-application-5256-5507/NetworkWebApplication/frontend/package.json
+            network-web-application-5256-5507/NetworkWebApplication/frontend/package-lock.json
+
+      - name: Install frontend dependencies for Cypress
+        working-directory: network-web-application-5256-5507/NetworkWebApplication/frontend
+        run: npm ci
+
+      - name: Run Cypress tests against Flask-served app
+        working-directory: network-web-application-5256-5507/NetworkWebApplication/frontend
+        env:
+          # Point Cypress to Flask at 5000 which serves the built frontend and API
+          CYPRESS_BASE_URL: "http://localhost:5000"
+          CYPRESS_API_BASE: "/api"
+          CI: "true"
+        run: npm run e2e:run
+
+      - name: Upload Flask logs on failure
+        if: failure()
+        run: |
+          echo "Uploading flask.log for debugging..."
+          cat flask.log || true
+
+      - name: Stop Flask
+        if: always()
+        run: |
+          if [ -f flask.pid ]; then
+            kill "$(cat flask.pid)" || true
+          fi
