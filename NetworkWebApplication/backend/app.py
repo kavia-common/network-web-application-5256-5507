@@ -54,6 +54,11 @@ def create_app() -> Flask:
     # Register resources (more will be added later)
     api.add_resource(HealthResource, "/health", endpoint="health")
 
+    # Devices resources
+    from .resources.devices import DevicesListResource, DeviceResource  # Import here to avoid circulars at module load
+    api.add_resource(DevicesListResource, "/devices", endpoint="devices_list")
+    api.add_resource(DeviceResource, "/devices/<string:device_id>", endpoint="device_detail")
+
     # Static file serving
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
@@ -87,6 +92,12 @@ def create_app() -> Flask:
                 {
                     "endpoints": [
                         {"method": "GET", "path": "/api/health", "description": "Health check"},
+                        {"method": "GET", "path": "/api/devices", "description": "List devices"},
+                        {"method": "POST", "path": "/api/devices", "description": "Create device"},
+                        {"method": "GET", "path": "/api/devices/<id>", "description": "Get device by id"},
+                        {"method": "PUT", "path": "/api/devices/<id>", "description": "Update device (full)"},
+                        {"method": "PATCH", "path": "/api/devices/<id>", "description": "Update device (partial)"},
+                        {"method": "DELETE", "path": "/api/devices/<id>", "description": "Delete device"},
                     ]
                 }
             )
